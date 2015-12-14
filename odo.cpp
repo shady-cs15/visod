@@ -43,6 +43,9 @@ string get_sequence(int n) {
 	return NULL;
 }
 
+// function performs ratiotest
+// to determine the best keypoint matches 
+// between consecutive poses
 void ratioTest(vector<vector<DMatch> > &matches, vector<DMatch> &good_matches) {
 	for (vector<vector<DMatch> >::iterator it = matches.begin(); it!=matches.end(); it++) {
 		if (it->size()>1 ) {
@@ -56,10 +59,57 @@ void ratioTest(vector<vector<DMatch> > &matches, vector<DMatch> &good_matches) {
 	}
 }
 
+// function returns relative scale 
+// for translation between two poses,
+// scale obtained from stereo disparities
+double getScale(int cur_index, vector<KeyPoint>& kp1, vector<KeyPoint>& kp2, Mat& Q) {
+	int prev_index = cur_index-1;
+	Mat disp1 = imread("./disparity/I1_"+get_sequence(prev_index)+".jpg", CV_LOAD_IMAGE_GRAYSCALE);
+	Mat disp2 = imread("./disparity/I1_"+get_sequence(cur_index)+".jpg", CV_LOAD_IMAGE_GRAYSCALE);
+	int vsize = kp1.size();
+	//cout << disp1.rows << "\n";
+	//cout << disp1.cols << "\n";
+	double temp_sum = 0.;
+	int valid_pairs = 0;
+	for (int i=0; i<vsize-1; i++) {
+		int j = i + 1;
+		int d1i = static_cast<unsigned>(disp1(Rect(kp1[i].pt.x, kp1[i].pt.y, 1, 1)).at<uchar>(0));
+		int d2i = static_cast<unsigned>(disp2(Rect(kp2[i].pt.x, kp2[i].pt.y, 1, 1)).at<uchar>(0));
+		int d1j = static_cast<unsigned>(disp1(Rect(kp1[j].pt.x, kp1[j].pt.y, 1, 1)).at<uchar>(0));
+		int d2j = static_cast<unsigned>(disp2(Rect(kp2[j].pt.x, kp2[j].pt.y, 1, 1)).at<uchar>(0));
+		if (d1i!=0 && d2i!=0 && d1j!=0 && d2j!=0) {
+			double pw1i = -1.0*(double) (d1i)*Q.at<double>(3, 2) + Q.at<double>(3, 3);
+			double pz1i = Q.at<double>(2, 3);
+			pz1i/=pw1i;
+			double pw1j = -1.0*(double) (d1j)*Q.at<double>(3, 2) + Q.at<double>(3, 3);
+			double pz1j = Q.at<double>(2, 3);
+			pz1j/=pw1j;
+			double pw2i = -1.0*(double) (d2i)*Q.at<double>(3, 2) + Q.at<double>(3, 3);
+			double pz2i = Q.at<double>(2, 3);
+			pz2i/=pw2i;
+			double pw2j = -1.0*(double) (d2j)*Q.at<double>(3, 2) + Q.at<double>(3, 3);
+			double pz2j = Q.at<double>(2, 3);
+			pz2j/=pw2j;
+
+			double scale = fabs(pz2i - pz2j) / fabs(pz1i - pz1j);
+			//cout << scale << " ";
+			if (isinf(scale)||isnan(scale) || scale > 5) continue;
+			temp_sum += scale;
+			valid_pairs ++;
+		}
+	}
+
+	//cout << "temp_sum: " << temp_sum << endl ;
+	if (temp_sum==0)
+		return 0.;
+	else 
+		return temp_sum/valid_pairs;
+}
+
 int main() {
 	int seq_id = 0, scene_id = 0;
 	Mat cur_frame, prev_frame, cur_frame_kp, prev_frame_kp;
-	cur_frame = imread("../2010_03_09_drive_0023/I1_000000.png");
+	cur_frame = imread("./2010_03_09_drive_0023/I1_000000.png");
 	//resize(cur_frame, cur_frame, Size(), 0.4, 0.6);
 	cvtColor(cur_frame, cur_frame, CV_BGR2GRAY);
 	vector<KeyPoint> keypoints_1, keypoints_2, good_keypoints_1, good_keypoints_2;
@@ -80,10 +130,12 @@ int main() {
 
 	Mat_<double> pose = (Mat_<double>(4, 1) << 0.00, 0.00, 0.00, 1.00);
 	Mat_<double> i4 = (Mat_<double>(1, 4) << 0.00, 0.00, 0.00, 1.00);
+	Mat Q;
+	Q = (Mat_<double>(4, 4) << 1.00, 0.00, 0.00, -660.1406, 0.00, 1.00, 0.00, -261.1004, 0.00, 0.00, 0.00, 893.4566, 0.00, 0.00, 1.752410659914044, 6.041435750053667);
 
 	for (int i=1; i<=SEQ_MAX; i++) {
 		cur_frame.copyTo(prev_frame);
-		cur_frame = imread("../2010_03_09_drive_0023/I1_"+get_sequence(i)+".png");
+		cur_frame = imread("./2010_03_09_drive_0023/I1_"+get_sequence(i)+".png");
 		//resize(cur_frame, cur_frame, Size(), 0.4, 0.6);
 		cvtColor(cur_frame, cur_frame, CV_BGR2GRAY);
 	
@@ -126,19 +178,24 @@ int main() {
 		KeyPoint::convert(good_keypoints_1, point1, vector<int>());
 		KeyPoint::convert(good_keypoints_2, point2, vector<int>());
 
+		// compute relative scale
+		// from good keypoints
+		double scale = getScale(i, good_keypoints_1, good_keypoints_2, Q);
+		cout << scale << endl;
+
 		double f = (double)(8.941981e+02 + 8.927151e+02)/2;
 		Point2f pp((float)6.601406e+02, (float)2.611004e+02);
 		Mat E, R, t, T;
 		if (point1.size() >5 && point2.size() > 5) {
 			E = findEssentialMat(point2, point1, f, pp, RANSAC, 0.999, 1.0);
 			recoverPose(E, point2, point1, R, t, f, pp);
+			t*=scale;
 			hconcat(R, t, T);
   			vconcat(T, i4, T);
   			pose = T*pose;
   			cout << pose.t() << "\n" ;
 
   			// Euler angles
-  			
   			double alpha_1 = atan2(R.at<double>(1,2), R.at<double>(2,2)) * 180 / PI;
   			cout << "[" << alpha_1 << ", ";
   			double c = sqrt(R.at<double>(0,0)*R.at<double>(0,0) + R.at<double>(0,1)*R.at<double>(0,1));

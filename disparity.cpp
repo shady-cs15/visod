@@ -46,7 +46,7 @@ int main() {
         cv::Mat leftdpf = cv::Mat::zeros(imsize, CV_32F);
 		cv::Mat rightdpf = cv::Mat::zeros(imsize, CV_32F);
 		Elas::parameters param;
-  		param.postprocess_only_left = false;
+  		param.postprocess_only_left = true;
   		Elas elas(param);
 		elas.process(left_frame.data,right_frame.data,leftdpf.ptr<float>(0),rightdpf.ptr<float>(0),dims);
 		Mat disp, leftdisp;
