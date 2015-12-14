@@ -153,11 +153,11 @@ int main() {
 		viewer->spinOnce();
 
 		resize(left_frame, left_frame, Size(), 0.5, 0.5);
-		resize(disp8U, disp8U, Size(), 0.5, 0.5);
+		//resize(disp8U, disp8U, Size(), 0.5, 0.5);
 		resize(disp, disp, Size(), 0.5, 0.5);
 
 		imshow("left frame", left_frame);
-		imshow("StereoBM", disp8U);
+		//imshow("StereoBM", disp8U);
 		imshow("libelas", disp);
 
 		int k = waitKey(0);

@@ -16,7 +16,7 @@ set (LIBELAS_SRC_DIR libelas)
 set (CMAKE_CXX_FLAGS "-msse3")
 
 FILE (GLOB LIBELAS_SRC_FILES libelas/*.cpp)
-add_executable(stereo stereotest.cpp ${LIBELAS_SRC_FILES})
+add_executable(stereo disparity.cpp ${LIBELAS_SRC_FILES})
 target_link_libraries(stereo ${OpenCV_LIBS} ${PCL_LIBRARIES})
 
 add_executable(pcd_read readpcd.cpp)
