@@ -138,7 +138,7 @@ int main() {
   			cout << pose.t() << "\n" ;
 
   			// Euler angles
-  			/*
+  			
   			double alpha_1 = atan2(R.at<double>(1,2), R.at<double>(2,2)) * 180 / PI;
   			cout << "[" << alpha_1 << ", ";
   			double c = sqrt(R.at<double>(0,0)*R.at<double>(0,0) + R.at<double>(0,1)*R.at<double>(0,1));
@@ -147,7 +147,7 @@ int main() {
   			double s1 = sin(alpha_1);
   			double c1 = cos(alpha_1);
   			double alpha_3 = atan2(s1*R.at<double>(2,0)-c1*R.at<double>(1,0),c1*R.at<double>(1,1)-s1*R.at<double>(2,1)) * 180 /PI; 
-  			cout << alpha_3 << "]\n";*/
+  			cout << alpha_3 << "]\n";
   		}
 
   		resize(img_matches, img_matches, Size(), 0.4, 0.6);
