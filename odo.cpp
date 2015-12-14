@@ -93,7 +93,7 @@ double getScale(int cur_index, vector<KeyPoint>& kp1, vector<KeyPoint>& kp2, Mat
 
 			double scale = fabs(pz2i - pz2j) / fabs(pz1i - pz1j);
 			//cout << scale << " ";
-			if (isinf(scale)||isnan(scale) || scale > 5) continue;
+			if (isinf(scale)||isnan(scale)||scale>10) continue;
 			temp_sum += scale;
 			valid_pairs ++;
 		}
@@ -132,6 +132,7 @@ int main() {
 	Mat_<double> i4 = (Mat_<double>(1, 4) << 0.00, 0.00, 0.00, 1.00);
 	Mat Q;
 	Q = (Mat_<double>(4, 4) << 1.00, 0.00, 0.00, -660.1406, 0.00, 1.00, 0.00, -261.1004, 0.00, 0.00, 0.00, 893.4566, 0.00, 0.00, 1.752410659914044, 6.041435750053667);
+	Mat top_view = Mat::zeros(400, 400, CV_8UC3);
 
 	for (int i=1; i<=SEQ_MAX; i++) {
 		cur_frame.copyTo(prev_frame);
@@ -205,10 +206,15 @@ int main() {
   			double c1 = cos(alpha_1);
   			double alpha_3 = atan2(s1*R.at<double>(2,0)-c1*R.at<double>(1,0),c1*R.at<double>(1,1)-s1*R.at<double>(2,1)) * 180 /PI; 
   			cout << alpha_3 << "]\n";
+
+			// draw in top view
+			circle(top_view, Point(20+pose.at<double>(0, 2), (20+pose.at<double>(0, 0))), 3, Scalar(0, 255, 0), -1);
+			//circle(top_view, Point(20, 20), 5, Scalar(255), -1);
   		}
 
   		resize(img_matches, img_matches, Size(), 0.4, 0.6);
   		imshow("matches", img_matches);
+  		imshow("Top view", top_view);
 		if (waitKey(0) == 27) break;
 	}
 	return 0;
