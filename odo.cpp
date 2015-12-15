@@ -49,7 +49,7 @@ string get_sequence(int n) {
 void ratioTest(vector<vector<DMatch> > &matches, vector<DMatch> &good_matches) {
 	for (vector<vector<DMatch> >::iterator it = matches.begin(); it!=matches.end(); it++) {
 		if (it->size()>1 ) {
-			if ((*it)[0].distance/(*it)[1].distance > 0.5f) {
+			if ((*it)[0].distance/(*it)[1].distance > 0.4f) { //0.5f
 				it->clear();
 			}
 		} else {
@@ -59,18 +59,24 @@ void ratioTest(vector<vector<DMatch> > &matches, vector<DMatch> &good_matches) {
 	}
 }
 
+double get_dist(double x1, double y1, double z1, double x2, double y2, double z2) {
+	return sqrt((x1-x2)*(x1-x2) + (y1-y2)*(y1-y2) + (z1-z2)*(z1-z2));
+}
+
 // function returns relative scale 
 // for translation between two poses,
 // scale obtained from stereo disparities
+// TODO- return median instead of mean 
+// TODO- compute scale absolute distance b/w 2 triangulated points
 double getScale(int cur_index, vector<KeyPoint>& kp1, vector<KeyPoint>& kp2, Mat& Q) {
 	int prev_index = cur_index-1;
 	Mat disp1 = imread("./disparity/I1_"+get_sequence(prev_index)+".jpg", CV_LOAD_IMAGE_GRAYSCALE);
 	Mat disp2 = imread("./disparity/I1_"+get_sequence(cur_index)+".jpg", CV_LOAD_IMAGE_GRAYSCALE);
 	int vsize = kp1.size();
-	//cout << disp1.rows << "\n";
-	//cout << disp1.cols << "\n";
+	
 	double temp_sum = 0.;
 	int valid_pairs = 0;
+	vector<double> scales;
 	for (int i=0; i<vsize-1; i++) {
 		int j = i + 1;
 		int d1i = static_cast<unsigned>(disp1(Rect(kp1[i].pt.x, kp1[i].pt.y, 1, 1)).at<uchar>(0));
@@ -79,38 +85,52 @@ double getScale(int cur_index, vector<KeyPoint>& kp1, vector<KeyPoint>& kp2, Mat
 		int d2j = static_cast<unsigned>(disp2(Rect(kp2[j].pt.x, kp2[j].pt.y, 1, 1)).at<uchar>(0));
 		if (d1i!=0 && d2i!=0 && d1j!=0 && d2j!=0) {
 			double pw1i = -1.0*(double) (d1i)*Q.at<double>(3, 2) + Q.at<double>(3, 3);
-			double pz1i = Q.at<double>(2, 3);
-			pz1i/=pw1i;
+			double pz1i = -Q.at<double>(2, 3);
+			double px1i = static_cast<double>(kp1[i].pt.x) + Q.at<double>(0, 3);
+			double py1i = static_cast<double>(kp1[i].pt.y) + Q.at<double>(1, 3);
+			pz1i/=pw1i; px1i/=pw1i; py1i/=pw1i;
+			
 			double pw1j = -1.0*(double) (d1j)*Q.at<double>(3, 2) + Q.at<double>(3, 3);
-			double pz1j = Q.at<double>(2, 3);
-			pz1j/=pw1j;
-			double pw2i = -1.0*(double) (d2i)*Q.at<double>(3, 2) + Q.at<double>(3, 3);
-			double pz2i = Q.at<double>(2, 3);
-			pz2i/=pw2i;
-			double pw2j = -1.0*(double) (d2j)*Q.at<double>(3, 2) + Q.at<double>(3, 3);
-			double pz2j = Q.at<double>(2, 3);
-			pz2j/=pw2j;
+			double pz1j = -Q.at<double>(2, 3);
+			double px1j = static_cast<double>(kp1[j].pt.x) + Q.at<double>(0, 3);
+			double py1j = static_cast<double>(kp1[j].pt.y) + Q.at<double>(1, 3);
+			pz1j/=pw1j; px1j/=pw1j; py1j/=pw1j;
 
-			double scale = fabs(pz2i - pz2j) / fabs(pz1i - pz1j);
-			//cout << scale << " ";
+			double pw2i = -1.0*(double) (d2i)*Q.at<double>(3, 2) + Q.at<double>(3, 3);
+			double pz2i = -Q.at<double>(2, 3);
+			double px2i = static_cast<double>(kp2[i].pt.x) + Q.at<double>(0, 3);
+			double py2i = static_cast<double>(kp2[i].pt.y) + Q.at<double>(1, 3);
+			pz2i/=pw2i; px2i/=pw2i; py2i/=pw2i;
+			
+			double pw2j = -1.0*(double) (d2j)*Q.at<double>(3, 2) + Q.at<double>(3, 3);
+			double pz2j = -Q.at<double>(2, 3);
+			double px2j = static_cast<double>(kp2[j].pt.x) + Q.at<double>(0, 3);
+			double py2j = static_cast<double>(kp2[j].pt.y) + Q.at<double>(1, 3);
+			pz2j/=pw2j; px2j/=pw2j; py2j/=pw2j;
+
+			//double scale = fabs(pz2i - pz2j) / fabs(pz1i - pz1j);
+			double scale = get_dist(px2i, py2i, pz2i, px2j, py2j, pz2j) / get_dist(px1i, py1i, pz1i, px1j, py1j, pz1j);
 			if (isinf(scale)||isnan(scale)||scale>10) continue;
-			temp_sum += scale;
-			valid_pairs ++;
+			//temp_sum += scale;
+			//valid_pairs ++;
+			scales.push_back(scale);
 		}
 	}
 
-	//cout << "temp_sum: " << temp_sum << endl ;
-	if (temp_sum==0)
-		return 0.;
-	else 
-		return temp_sum/valid_pairs;
+	//if (valid_pairs==0) return 0;
+	//return temp_sum/valid_pairs;
+	if (scales.size()) {
+		sort(scales.begin(), scales.end());
+		return scales[scales.size()/2];
+	}
+	else return 0.;
 }
 
 int main() {
 	int seq_id = 0, scene_id = 0;
 	Mat cur_frame, prev_frame, cur_frame_kp, prev_frame_kp;
 	cur_frame = imread("./2010_03_09_drive_0023/I1_000000.png");
-	//resize(cur_frame, cur_frame, Size(), 0.4, 0.6);
+	
 	cvtColor(cur_frame, cur_frame, CV_BGR2GRAY);
 	vector<KeyPoint> keypoints_1, keypoints_2, good_keypoints_1, good_keypoints_2;
 	vector<vector<DMatch> > matches;
@@ -132,7 +152,12 @@ int main() {
 	Mat_<double> i4 = (Mat_<double>(1, 4) << 0.00, 0.00, 0.00, 1.00);
 	Mat Q;
 	Q = (Mat_<double>(4, 4) << 1.00, 0.00, 0.00, -660.1406, 0.00, 1.00, 0.00, -261.1004, 0.00, 0.00, 0.00, 893.4566, 0.00, 0.00, 1.752410659914044, 6.041435750053667);
-	Mat top_view = Mat::zeros(400, 400, CV_8UC3);
+	Mat top_view = Mat::zeros(1000, 1000, CV_8UC3);
+
+	//added
+	Mat R_, t_;
+	R_ = (Mat_<double>(3, 3) << 1., 0., 0., 0., 1., 0., 0., 0., 1.);
+	t_ = (Mat_<double>(3, 1) << 0., 0., 0.);
 
 	for (int i=1; i<=SEQ_MAX; i++) {
 		cur_frame.copyTo(prev_frame);
@@ -194,9 +219,14 @@ int main() {
 			hconcat(R, t, T);
   			vconcat(T, i4, T);
   			pose = T*pose;
-  			cout << pose.t() << "\n" ;
+  			cout << "pose: " << pose.t() << "\n" ;
+
+  			//added
+  			t_ = t_ + (R_*(scale*t));
+  			R_ = R*R_;
 
   			// Euler angles
+  			cout << "Rotation: ";
   			double alpha_1 = atan2(R.at<double>(1,2), R.at<double>(2,2)) * 180 / PI;
   			cout << "[" << alpha_1 << ", ";
   			double c = sqrt(R.at<double>(0,0)*R.at<double>(0,0) + R.at<double>(0,1)*R.at<double>(0,1));
@@ -207,10 +237,11 @@ int main() {
   			double alpha_3 = atan2(s1*R.at<double>(2,0)-c1*R.at<double>(1,0),c1*R.at<double>(1,1)-s1*R.at<double>(2,1)) * 180 /PI; 
   			cout << alpha_3 << "]\n";
 
+			cout << "translation: "<< t.t() << "\n" << endl ;
+
 			// draw in top view
-			circle(top_view, Point(20+pose.at<double>(0, 2), (20+pose.at<double>(0, 0))), 3, Scalar(0, 255, 0), -1);
-			//circle(top_view, Point(20, 20), 5, Scalar(255), -1);
-  		}
+			circle(top_view, Point(420+t_.at<double>(0, 2), (420+t_.at<double>(0, 0))), 3, Scalar(0, 255, 0), -1);
+		}
 
   		resize(img_matches, img_matches, Size(), 0.4, 0.6);
   		imshow("matches", img_matches);
