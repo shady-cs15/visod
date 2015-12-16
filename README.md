@@ -8,12 +8,11 @@ OpenCV 3.0.0 <br>
 
 # Running Instructions
 copy the data into the directory 'Visual Odometry' <br>
-Currently uses drive sequence '2010_03_09_drive_0023'
 ```
 cmake .
 make 
-./stereo
-./odo
+./stereo 2010_03_09_drive_0023 111
+./odo 2010_03_09_drive_0023 111 
 ```
 
 # Demo

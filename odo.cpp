@@ -29,8 +29,8 @@ THE SOFTWARE.
 #include "opencv2/calib3d/calib3d.hpp"
 #include "math.h"
 
-#define SEQ_MAX 111
 #define PI 3.14159265
+#define minFeatures 35
 
 using namespace std;
 using namespace cv;
@@ -66,16 +66,13 @@ double get_dist(double x1, double y1, double z1, double x2, double y2, double z2
 // function returns relative scale 
 // for translation between two poses,
 // scale obtained from stereo disparities
-// TODO- return median instead of mean 
-// TODO- compute scale absolute distance b/w 2 triangulated points
-double getScale(int cur_index, vector<KeyPoint>& kp1, vector<KeyPoint>& kp2, Mat& Q) {
+double getScale(int cur_index, vector<KeyPoint>& kp1, vector<KeyPoint>& kp2, Mat& Q, string& path) {
+
 	int prev_index = cur_index-1;
-	Mat disp1 = imread("./disparity/I1_"+get_sequence(prev_index)+".jpg", CV_LOAD_IMAGE_GRAYSCALE);
-	Mat disp2 = imread("./disparity/I1_"+get_sequence(cur_index)+".jpg", CV_LOAD_IMAGE_GRAYSCALE);
+	Mat disp1 = imread("./disparity/"+path+"I1_"+get_sequence(prev_index)+".jpg", CV_LOAD_IMAGE_GRAYSCALE);
+	Mat disp2 = imread("./disparity/"+path+"I1_"+get_sequence(cur_index)+".jpg", CV_LOAD_IMAGE_GRAYSCALE);
 	int vsize = kp1.size();
 	
-	double temp_sum = 0.;
-	int valid_pairs = 0;
 	vector<double> scales;
 	for (int i=0; i<vsize-1; i++) {
 		int j = i + 1;
@@ -108,17 +105,12 @@ double getScale(int cur_index, vector<KeyPoint>& kp1, vector<KeyPoint>& kp2, Mat
 			double py2j = static_cast<double>(kp2[j].pt.y) + Q.at<double>(1, 3);
 			pz2j/=pw2j; px2j/=pw2j; py2j/=pw2j;
 
-			//double scale = fabs(pz2i - pz2j) / fabs(pz1i - pz1j);
 			double scale = get_dist(px2i, py2i, pz2i, px2j, py2j, pz2j) / get_dist(px1i, py1i, pz1i, px1j, py1j, pz1j);
 			if (isinf(scale)||isnan(scale)||scale>10) continue;
-			//temp_sum += scale;
-			//valid_pairs ++;
 			scales.push_back(scale);
 		}
 	}
 
-	//if (valid_pairs==0) return 0;
-	//return temp_sum/valid_pairs;
 	if (scales.size()) {
 		sort(scales.begin(), scales.end());
 		return scales[scales.size()/2];
@@ -126,10 +118,24 @@ double getScale(int cur_index, vector<KeyPoint>& kp1, vector<KeyPoint>& kp2, Mat
 	else return 0.;
 }
 
-int main() {
+
+
+int main(int argc, char** argv) {
+
+	if (argc< 3) {
+		cout << "Enter path to data.. ./odo <path> <numFiles>\n";
+		return -1;
+	}
+	
+	if (argv[1][strlen(argv[1])-1] == '/') {
+		argv[1][strlen(argv[1])-1] = '\0';
+	}
+	string path = string(argv[1]);
+	int SEQ_MAX = atoi(argv[2]);
+
 	int seq_id = 0, scene_id = 0;
 	Mat cur_frame, prev_frame, cur_frame_kp, prev_frame_kp;
-	cur_frame = imread("./2010_03_09_drive_0023/I1_000000.png");
+	cur_frame = imread("./"+path+"/I1_000000.png");
 	
 	cvtColor(cur_frame, cur_frame, CV_BGR2GRAY);
 	vector<KeyPoint> keypoints_1, keypoints_2, good_keypoints_1, good_keypoints_2;
@@ -152,21 +158,20 @@ int main() {
 	Mat_<double> i4 = (Mat_<double>(1, 4) << 0.00, 0.00, 0.00, 1.00);
 	Mat Q;
 	Q = (Mat_<double>(4, 4) << 1.00, 0.00, 0.00, -660.1406, 0.00, 1.00, 0.00, -261.1004, 0.00, 0.00, 0.00, 893.4566, 0.00, 0.00, 1.752410659914044, 6.041435750053667);
-	Mat top_view = Mat::zeros(1000, 1000, CV_8UC3);
+	Mat top_view = Mat::zeros(400, 400, CV_8UC3);
 
-	//added
 	Mat R_, t_;
 	R_ = (Mat_<double>(3, 3) << 1., 0., 0., 0., 1., 0., 0., 0., 1.);
 	t_ = (Mat_<double>(3, 1) << 0., 0., 0.);
 
 	for (int i=1; i<=SEQ_MAX; i++) {
 		cur_frame.copyTo(prev_frame);
-		cur_frame = imread("./2010_03_09_drive_0023/I1_"+get_sequence(i)+".png");
-		//resize(cur_frame, cur_frame, Size(), 0.4, 0.6);
+		cur_frame = imread("./"+path+"/I1_"+get_sequence(i)+".png");
 		cvtColor(cur_frame, cur_frame, CV_BGR2GRAY);
-	
 		keypoints_1 = keypoints_2;
 		descriptors_2.copyTo(descriptors_1);
+		point1 = point2;
+		
 		detector->detect(cur_frame, keypoints_2);
 		extractor->compute(cur_frame, keypoints_2, descriptors_2);
 		matches.clear();
@@ -183,8 +188,11 @@ int main() {
                	good_matches, img_matches, Scalar::all(-1), Scalar::all(-1),
                	vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
 
-		// TODO track features
-		// (if needed)
+		// TODO track features using Lucas Kanade
+		// If no. of features falls below threshold
+		// then recompute features and use knnMatch
+		// to select good features
+		// Repeat.
 		
 
 		// Retrieve 2D points from good_matches
@@ -203,10 +211,10 @@ int main() {
 		}
 		KeyPoint::convert(good_keypoints_1, point1, vector<int>());
 		KeyPoint::convert(good_keypoints_2, point2, vector<int>());
-
+		
 		// compute relative scale
 		// from good keypoints
-		double scale = getScale(i, good_keypoints_1, good_keypoints_2, Q);
+		double scale = getScale(i, good_keypoints_1, good_keypoints_2, Q, path);
 		cout << scale << endl;
 
 		double f = (double)(8.941981e+02 + 8.927151e+02)/2;
@@ -215,18 +223,12 @@ int main() {
 		if (point1.size() >5 && point2.size() > 5) {
 			E = findEssentialMat(point2, point1, f, pp, RANSAC, 0.999, 1.0);
 			recoverPose(E, point2, point1, R, t, f, pp);
-			t*=scale;
-			hconcat(R, t, T);
-  			vconcat(T, i4, T);
-  			pose = T*pose;
-  			cout << "pose: " << pose.t() << "\n" ;
-
-  			//added
-  			t_ = t_ + (R_*(scale*t));
+			t_ = t_ + (R_*(scale*t));
   			R_ = R*R_;
 
-  			// Euler angles
-  			cout << "Rotation: ";
+  			// Euler angles from rotation matrices
+  			// Display rotation and translation
+  			cout << "rotation: ";
   			double alpha_1 = atan2(R.at<double>(1,2), R.at<double>(2,2)) * 180 / PI;
   			cout << "[" << alpha_1 << ", ";
   			double c = sqrt(R.at<double>(0,0)*R.at<double>(0,0) + R.at<double>(0,1)*R.at<double>(0,1));
@@ -236,11 +238,10 @@ int main() {
   			double c1 = cos(alpha_1);
   			double alpha_3 = atan2(s1*R.at<double>(2,0)-c1*R.at<double>(1,0),c1*R.at<double>(1,1)-s1*R.at<double>(2,1)) * 180 /PI; 
   			cout << alpha_3 << "]\n";
-
 			cout << "translation: "<< t.t() << "\n" << endl ;
 
-			// draw in top view
-			circle(top_view, Point(420+t_.at<double>(0, 2), (420+t_.at<double>(0, 0))), 3, Scalar(0, 255, 0), -1);
+			// Draw in top view
+			circle(top_view, Point(100+t_.at<double>(0, 2), (200+t_.at<double>(0, 0))), 3, Scalar(0, 255, 0), -1);
 		}
 
   		resize(img_matches, img_matches, Size(), 0.4, 0.6);
