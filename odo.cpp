@@ -49,7 +49,7 @@ string get_sequence(int n) {
 void ratioTest(vector<vector<DMatch> > &matches, vector<DMatch> &good_matches) {
 	for (vector<vector<DMatch> >::iterator it = matches.begin(); it!=matches.end(); it++) {
 		if (it->size()>1 ) {
-			if ((*it)[0].distance/(*it)[1].distance > 0.4f) { //0.5f
+			if ((*it)[0].distance/(*it)[1].distance > 0.6f) {
 				it->clear();
 			}
 		} else {
@@ -242,6 +242,7 @@ int main(int argc, char** argv) {
 
 			// Draw in top view
 			circle(top_view, Point(100+t_.at<double>(0, 2), (200+t_.at<double>(0, 0))), 3, Scalar(0, 255, 0), -1);
+			circle(top_view, Point(100+t_.at<double>(0, 2), (200+t_.at<double>(0, 0))), 2, Scalar(0, 0, 255), -1);
 		}
 
   		resize(img_matches, img_matches, Size(), 0.4, 0.6);
